@@ -115,6 +115,7 @@ class Dir extends Nette\Object implements \IteratorAggregate
 			throw new IOException("Cannot save corrupted file.");
 		}
 
+		$this->ensureWritable();
 		do {
 			$name = Nette\Utils\Strings::random(10) . '.' . ($filename ?: $file->getSanitizedName());
 		} while (file_exists($path = $this->dir . DIRECTORY_SEPARATOR . $name));
