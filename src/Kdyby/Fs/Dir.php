@@ -18,7 +18,7 @@ use Nette;
 /**
  * @author Filip Procházka <filip@prochazka.su>
  */
-class Dir extends Nette\Object
+class Dir extends Nette\Object implements \IteratorAggregate
 {
 
 	/**
@@ -128,11 +128,43 @@ class Dir extends Nette\Object
 
 	/**
 	 * @param string $mask
+	 * @param bool $recursive
 	 * @return \Nette\Utils\Finder|\SplFileInfo[]
 	 */
-	public function find($mask)
+	public function find($mask, $recursive = FALSE)
 	{
-		return Nette\Utils\Finder::find(func_get_args())->from($this->dir);
+		return Nette\Utils\Finder::find(func_get_args())->{$recursive ? 'from' : 'in'}($this->dir);
+	}
+
+
+
+	/**
+	 * @param bool $recursive
+	 * @return \Nette\Utils\Finder|\SplFileInfo[]|\Traversable
+	 */
+	public function getIterator($recursive = FALSE)
+	{
+		return $this->find('*', $recursive);
+	}
+
+
+
+	/**
+	 * @throws IOException
+	 */
+	public function purge()
+	{
+		foreach ($this->getIterator(TRUE)->childFirst() as $file) {
+			/** @var \SplFileInfo $file */
+			if($file->isDir()){
+				if (!@rmdir($file->getPathname())) {
+					throw new IOException("Cannot delete directory {$file->getPathname()}");
+				}
+
+			} elseif (!@unlink($file->getPathname())) {
+				throw new IOException("Cannot delete file {$file->getPathname()}");
+			}
+		}
 	}
 
 

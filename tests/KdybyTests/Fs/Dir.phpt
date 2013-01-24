@@ -33,8 +33,11 @@ class DirTest extends Tester\TestCase
 		$dir->ensureWritable();
 		Assert::true(file_exists(TEMP_DIR . '/test'));
 		Assert::true(is_writable(TEMP_DIR . '/test'));
+
 		$dir->write('the-cake.txt', "is a lie");
 		Assert::same("is a lie", file_get_contents(TEMP_DIR . '/test/the-cake.txt'));
+		$dir->purge();
+		Assert::false(file_exists(TEMP_DIR . '/test/the-cake.txt'));
 	}
 
 }
