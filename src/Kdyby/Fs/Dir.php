@@ -109,7 +109,7 @@ class Dir extends Nette\Object implements \IteratorAggregate
 	 * @throws IOException
 	 * @return string
 	 */
-	public function upload(Nette\Http\FileUpload $file, $filename = NULL)
+	public function writeUploaded(Nette\Http\FileUpload $file, $filename = NULL)
 	{
 		if (!$file->isOk()) {
 			throw new IOException("Cannot save corrupted file.");
