@@ -57,7 +57,7 @@ class Dir extends Nette\Object implements \IteratorAggregate
 		}
 
 		if (!is_writable($this->dir) && !@chmod($this->dir, $this->chmod)) {
-			throw new IOException("Please make directory '{$this->dir}' writable, it cannot be made automatically");
+			throw new IOException("Please make directory '{$this->dir}' writable, it cannot be done automatically");
 		}
 	}
 
