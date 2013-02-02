@@ -8,7 +8,7 @@
  * @package Kdyby\Fs
  */
 
-namespace KdybyTests\Fs;
+namespace KdybyTests\Filesystem;
 
 use Kdyby;
 use Nette;
@@ -28,7 +28,7 @@ class DirTest extends Tester\TestCase
 	public function testFunctionality()
 	{
 		Assert::false(file_exists(TEMP_DIR . '/test'));
-		$dir = new Kdyby\Fs\Dir(TEMP_DIR . '/test');
+		$dir = new Kdyby\Filesystem\Dir(TEMP_DIR . '/test');
 		Assert::false(file_exists(TEMP_DIR . '/test'));
 		$dir->ensureWritable();
 		Assert::true(file_exists(TEMP_DIR . '/test'));

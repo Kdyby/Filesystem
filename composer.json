@@ -1,5 +1,5 @@
 {
-	"name": "kdyby/fs",
+	"name": "kdyby/filesystem",
 	"type": "library",
 	"description": "Filesystem helpers for Nette Framework",
 	"keywords": ["nette", "kdyby", "fs", "filesystem", "directory"],
@@ -13,7 +13,7 @@
 	],
 	"support": {
 		"email": "filip@prochazka.su",
-		"issues": "https://github.com/kdyby/boilerplate/issues"
+		"issues": "https://github.com/kdyby/filesystem/issues"
 	},
 	"require": {
 		"nette/nette": "@dev"
@@ -23,10 +23,10 @@
 	},
 	"autoload": {
 		"psr-0": {
-			"Kdyby\\Fs\\": "src/"
+			"Kdyby\\Filesystem\\": "src/"
 		},
 		"classmap": [
-			"src/Kdyby/Fs/exceptions.php"
+			"src/Kdyby/Filesystem/exceptions.php"
 		]
 	}
 }
