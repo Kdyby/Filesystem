@@ -29,8 +29,6 @@ class DirTest extends Tester\TestCase
 	{
 		Assert::false(file_exists(TEMP_DIR . '/test'));
 		$dir = new Kdyby\Filesystem\Dir(TEMP_DIR . '/test');
-		Assert::false(file_exists(TEMP_DIR . '/test'));
-		$dir->ensureWritable();
 		Assert::true(file_exists(TEMP_DIR . '/test'));
 		Assert::true(is_writable(TEMP_DIR . '/test'));
 

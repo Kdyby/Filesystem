@@ -12,11 +12,24 @@ namespace Kdyby\Filesystem;
 
 use Kdyby;
 use Nette;
+use Symfony\Component\Filesystem\Exception\IOException as SfException;
+use Symfony\Component\Filesystem\Filesystem;
 
 
 
 /**
  * @author Filip Procházka <filip@prochazka.su>
+ *
+ * @method \Kdyby\Filesystem\Dir copy($originFile, $targetFile, $override = FALSE)
+ * @method \Kdyby\Filesystem\Dir mkdir($dir, $mode = 0777)
+ * @method \Kdyby\Filesystem\Dir touch($file, $time = NULL, $atime = NULL)
+ * @method \Kdyby\Filesystem\Dir remove($file)
+ * @method \Kdyby\Filesystem\Dir chmod($file, $mode, $umask = 0000, $recursive = FALSE)
+ * @method \Kdyby\Filesystem\Dir chown($file, $user, $recursive = FALSE)
+ * @method \Kdyby\Filesystem\Dir chgrp($file, $group, $recursive = FALSE)
+ * @method \Kdyby\Filesystem\Dir rename($origin, $target)
+ * @method \Kdyby\Filesystem\Dir symlink($originDir, $targetDir, $copyOnWindows = FALSE)
+ * @method \Kdyby\Filesystem\Dir mirror($originDir, $targetDir, \Traversable $iterator = NULL, $options = array())
  */
 class Dir extends Nette\Object implements \IteratorAggregate
 {
@@ -27,52 +40,58 @@ class Dir extends Nette\Object implements \IteratorAggregate
 	private $dir;
 
 	/**
-	 * @var int
+	 * @var \Symfony\Component\Filesystem\Filesystem
 	 */
-	private $chmod;
+	private $io;
+
+	/**
+	 * @var array
+	 */
+	private static $fileArg = array(
+		'copy' => 1,
+		'mkdir' => 0,
+		'touch' => 0,
+		'remove' => 0,
+		'chmod' => 0,
+		'chown' => 0,
+		'chgrp' => 0,
+		'rename' => 1,
+		'symlink' => 1,
+		'mirror' => 1,
+	);
 
 
 
 	/**
 	 * @param string $dir
-	 * @param int $chmod
+	 * @param int $mode
+	 * @param \Symfony\Component\Filesystem\Filesystem $io
 	 */
-	public function __construct($dir, $chmod = 0777)
+	public function __construct($dir, $mode = 0777, Filesystem $io = NULL)
 	{
 		$this->dir = rtrim($dir, DIRECTORY_SEPARATOR);
-		$this->chmod = $chmod;
+		$this->io = $io ?: new Filesystem;
+		$this->ensureWritable($mode);
 	}
 
 
 
 	/**
+	 * @param int $mode
 	 * @throws IOException
-	 */
-	public function ensureWritable()
-	{
-		if (!is_dir($this->dir)) {
-			$old = umask(0);
-			@mkdir($this->dir, $this->chmod, TRUE);
-			umask($old);
-		}
-
-		if (!is_writable($this->dir) && !@chmod($this->dir, $this->chmod)) {
-			throw new IOException("Please make directory '{$this->dir}' writable, it cannot be done automatically");
-		}
-	}
-
-
-
-	/**
-	 * @param string $dir
 	 * @return Dir
 	 */
-	public function createSubDir($dir)
+	protected function ensureWritable($mode = 0777)
 	{
-		$this->ensureWritable();
-		$dir = new Dir($this->dir . DIRECTORY_SEPARATOR . $dir);
-		$dir->ensureWritable();
-		return $dir;
+		try {
+			$this->io->mkdir($this->dir, $mode);
+			$this->io->chmod($this->dir, $mode, 0000, TRUE);
+
+		} catch (SfException $e) {
+			throw new IOException("Please make directory '{$this->dir}' writable, it cannot be done automatically", 0, $e);
+		}
+
+		return $this;
 	}
 
 
@@ -95,9 +114,15 @@ class Dir extends Nette\Object implements \IteratorAggregate
 	 */
 	public function write($file, $contents)
 	{
-		$this->ensureWritable();
-		if (!@file_put_contents($path = $this->dir . DIRECTORY_SEPARATOR . $file, $contents)) {
-			throw new IOException("Cannot write to file '$path'");
+		try {
+			$this->io->mkdir(dirname($path = $this->dir . DIRECTORY_SEPARATOR . $file));
+
+		} catch (SfException $e) {
+			throw new IOException($e->getMessage(), 0, $e);
+		}
+
+		if (!@file_put_contents($path, $contents)) {
+			throw new IOException("Cannot write to file '$path'" . (($err = error_get_last()) ? ': ' . $err['message'] : NULL));
 		}
 	}
 
@@ -115,7 +140,6 @@ class Dir extends Nette\Object implements \IteratorAggregate
 			throw new IOException("Cannot save corrupted file.");
 		}
 
-		$this->ensureWritable();
 		do {
 			$name = Nette\Utils\Strings::random(10) . '.' . ($filename ?: $file->getSanitizedName());
 		} while (file_exists($path = $this->dir . DIRECTORY_SEPARATOR . $name));
@@ -128,13 +152,66 @@ class Dir extends Nette\Object implements \IteratorAggregate
 
 
 	/**
+	 * @throws IOException
+	 */
+	public function purge()
+	{
+		foreach ($this->getIterator(TRUE)->childFirst() as $file) {
+			/** @var \SplFileInfo $file */
+			if ($file->isDir()) {
+				if (!@rmdir($file->getPathname())) {
+					throw new IOException("Cannot delete directory {$file->getPathname()}");
+				}
+
+			} elseif (!@unlink($file->getPathname())) {
+				throw new IOException("Cannot delete file {$file->getPathname()}");
+			}
+		}
+	}
+
+
+
+	/**
 	 * @param string $mask
 	 * @param bool $recursive
 	 * @return \Nette\Utils\Finder|\SplFileInfo[]
 	 */
 	public function find($mask, $recursive = FALSE)
 	{
-		return Nette\Utils\Finder::find(func_get_args())->{$recursive ? 'from' : 'in'}($this->dir);
+		$masks = is_array($mask) ? $mask : func_get_args();
+		if (is_bool(end($masks))) {
+			$recursive = array_pop($masks);
+		}
+
+		return Nette\Utils\Finder::find($masks)->{$recursive ? 'from' : 'in'}($this->dir);
+	}
+
+
+
+	/**
+	 * @param string $name
+	 * @param array $args
+	 * @return mixed
+	 * @throws IOException
+	 */
+	public function __call($name, $args)
+	{
+		if (isset(self::$fileArg[$name])) {
+			$dir = $this->dir;
+			$args[self::$fileArg[$name]] = is_array($args[self::$fileArg[$name]])
+				? array_map(function ($arg) use ($dir) { return $dir . DIRECTORY_SEPARATOR . $arg; }, $args[self::$fileArg[$name]])
+				: $this->dir . DIRECTORY_SEPARATOR . $args[self::$fileArg[$name]];
+
+			try {
+				call_user_func_array(array($this->io, $name), $args);
+				return $this;
+
+			} catch (SfException $e) {
+				throw new IOException($e->getMessage(), 0, $e);
+			}
+		}
+
+		return parent::__call($name, $args);
 	}
 
 
@@ -146,26 +223,6 @@ class Dir extends Nette\Object implements \IteratorAggregate
 	public function getIterator($recursive = FALSE)
 	{
 		return $this->find('*', $recursive);
-	}
-
-
-
-	/**
-	 * @throws IOException
-	 */
-	public function purge()
-	{
-		foreach ($this->getIterator(TRUE)->childFirst() as $file) {
-			/** @var \SplFileInfo $file */
-			if($file->isDir()){
-				if (!@rmdir($file->getPathname())) {
-					throw new IOException("Cannot delete directory {$file->getPathname()}");
-				}
-
-			} elseif (!@unlink($file->getPathname())) {
-				throw new IOException("Cannot delete file {$file->getPathname()}");
-			}
-		}
 	}
 
 
